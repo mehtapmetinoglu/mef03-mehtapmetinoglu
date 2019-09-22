@@ -1,4 +1,4 @@
-## Mehtap Colak Progress Journal
+# Mehtap Colak Progress Journal
 
 ## Week 1
 
