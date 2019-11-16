@@ -1,0 +1,175 @@
+---
+title: "Mehtap Çolak BKM Assignment"
+output: html_document
+---
+Necessary packages for having a comprehensive analysis are listed below:
+```{r warning=FALSE,message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(rvest)
+library(ggplot2)
+library(scales)
+library(dplyr)
+library(plyr)
+```
+
+## Data Extraction
+All BKM data from 2015 to the 6th month of 2019 were obtained.
+```{r warning=FALSE,message=FALSE}
+
+bkm_sektor <- function(year,month) {
+  url <- paste('https://bkm.com.tr/secilen-aya-ait-sektorel-gelisim/?filter_year=',year,'&filter_month=',month,'&List=Listele', sep='',collapse = NULL)
+  return(url)
+}
+
+yil_parametre <-c('2015','2016','2017','2018','2019')
+ay_parametre <- c('01','02','03','04','05','06','07','08','09','10','11','12')
+total_data <- ''
+    
+for (i in 1:length(yil_parametre)) {
+  for (j in 1:length(ay_parametre)) {
+    if (yil_parametre[i]=='2019' & ay_parametre[j]=='07') {break}
+    url <- bkm_sektor(yil_parametre[i],ay_parametre[j])
+    page <- read_html(url)
+    df <- page %>% html_nodes("table") %>%.[(4)] %>% html_table(page, fill = TRUE,header = FALSE)  %>%  as.data.frame() 
+    df <- df %>%mutate_if(is.numeric,funs(ifelse(is.na(.),0,.))) %>%  mutate(yearmonth=paste(yil_parametre[i],ay_parametre[j],sep=''))
+    total_data<-rbind(total_data,df)
+  }
+}
+
+```
+
+## Updating Column Names
+* isyeri_grubu: İşyeri Grubu
+* islem_adet_kk: İşlem Adedi (Kredi Kartı)
+* islem_tutar_kk: İşlem Tutarı / Milyon TL (Kredi Kartı)
+* islem_adet_bk: İşlem Adedi (Banka Kartı)
+* islem_tutar_bk: İşlem Tutarı / Milyon TL (Banka Kartı)
+* yearmonth
+
+```{r}
+
+colnames(total_data) <- c('isyeri_grubu','islem_adet_kk','islem_adet_bk','islem_tutar_kk','islem_tutar_bk'                              ,'yearmonth')
+total_data <- total_data %>% slice(2:max(nrow(.))) %>% filter(isyeri_grubu !='TOPLAM')
+total_data <- total_data %>% filter(isyeri_grubu !='İşyeri Grubu')
+
+bkm_data <-total_data
+
+bkm_data[,2:5]  <- as.data.frame(lapply(bkm_data[,2:5], function(x) as.numeric(gsub(",", ".", gsub("\\.", "", x)))))
+
+head(bkm_data, 10)
+
+```
+Total transaction amount data from 2015 to 2019 were collected.
+```{r}
+#Data set preparation for chart
+
+toplam_islem_tutar <-bkm_data %>% mutate( toplam = (islem_tutar_kk + islem_tutar_bk))%>% select(isyeri_grubu,yearmonth,toplam)%>%filter(toplam!=0)
+
+toplam_islem_tutar_2015<-toplam_islem_tutar %>% filter(grepl("^2015", yearmonth))
+toplam_islem_tutar_2016<-toplam_islem_tutar %>% filter(grepl("^2016", yearmonth))
+toplam_islem_tutar_2017<-toplam_islem_tutar %>% filter(grepl("^2017", yearmonth))
+toplam_islem_tutar_2018<-toplam_islem_tutar %>% filter(grepl("^2018", yearmonth))
+toplam_islem_tutar_2019<-toplam_islem_tutar %>% filter(grepl("^2019", yearmonth))
+
+toplam_islem_tutar_2015<-ddply(toplam_islem_tutar_2015,"isyeri_grubu",numcolwise(sum))
+toplam_islem_tutar_2016<-ddply(toplam_islem_tutar_2016,"isyeri_grubu",numcolwise(sum))
+toplam_islem_tutar_2017<-ddply(toplam_islem_tutar_2017,"isyeri_grubu",numcolwise(sum))
+toplam_islem_tutar_2018<-ddply(toplam_islem_tutar_2018,"isyeri_grubu",numcolwise(sum))
+toplam_islem_tutar_2019<-ddply(toplam_islem_tutar_2019,"isyeri_grubu",numcolwise(sum))
+
+head(toplam_islem_tutar_2015, 10)
+```
+All data are added to the year they belong.
+```{r}
+year <- '2015'
+islem_tutar_2015 <- cbind(toplam_islem_tutar_2015, year)
+year <- '2016'
+islem_tutar_2016 <- cbind(toplam_islem_tutar_2016, year)
+year <- '2017'
+islem_tutar_2017 <- cbind(toplam_islem_tutar_2017, year)
+year <- '2018'
+islem_tutar_2018 <- cbind(toplam_islem_tutar_2018, year)
+year <- '2019'
+islem_tutar_2019 <- cbind(toplam_islem_tutar_2019, year)
+
+islem_tutari_data <- rbind(islem_tutar_2015, islem_tutar_2016, islem_tutar_2017, islem_tutar_2018, islem_tutar_2019)
+
+islem_tutari_data$year <-as.character(islem_tutari_data$year)
+
+tail(islem_tutari_data, 10)
+
+```
+## Data Analyzing 1
+Total transaction amount was calculated by years.
+```{r}
+
+bkm_islem_tutari <- aggregate(islem_tutari_data$toplam, by=list(year=islem_tutari_data$year), FUN=sum)
+
+library(ggplot2)
+theme_set(theme_bw())
+options(scipen=999)
+
+# Draw plot
+ggplot(bkm_islem_tutari, aes(x=year, y=x)) + 
+  geom_bar(stat="identity", width=.5, fill="tomato3") + 
+  labs(title="Total Transaction Amount by Years", 
+       subtitle="Amount of Transaction from All Sectors", 
+       y = "Total Transaction Amount",
+       x = "Year",
+       caption="source: mpg") + 
+  theme(axis.text.x = element_text(angle=65, vjust=0.6))
+
+```
+
+## Data Analyzing 2
+Sectoral Distribution of Total Transaction Amount was calculated. Market and Shopping Centers had the highest share.
+```{r}
+library(ggplot2)
+library(scales)
+
+ggplot(islem_tutari_data, aes(x=isyeri_grubu, y=toplam)) +
+  geom_bar(stat="identity",fill="tomato3")+ coord_flip() + scale_y_continuous(labels=comma) +
+  labs(title = "Sectoral Distribution of Total Transaction Amount", x="", y="") +theme_minimal()
+```
+
+## Data Analyzing 3
+The total transaction amount of the sectors in all years was calculated.
+
+```{r}
+bkm_islem_tutari <- aggregate(islem_tutari_data$toplam, by=list(isyeri_grubu=islem_tutari_data$isyeri_grubu), FUN=sum)
+
+head(bkm_islem_tutari, 10)
+
+```
+
+The 5 sectors with the highest amount of transactions were identified and their distribution was plotted.
+
+```{r}
+
+bkm_islem_tutari <- bkm_islem_tutari[order(bkm_islem_tutari$x, decreasing = TRUE),]  
+bkm_islem_tutari_top5 <- bkm_islem_tutari %>% slice(1:5)
+
+# Compute percentages
+bkm_islem_tutari_top5$fraction = bkm_islem_tutari_top5$x / sum(bkm_islem_tutari_top5$x)
+
+# Compute the cumulative percentages (top of each rectangle)
+bkm_islem_tutari_top5$ymax = cumsum(bkm_islem_tutari_top5$fraction)
+
+# Compute the bottom of each rectangle
+bkm_islem_tutari_top5$ymin = c(0, head(bkm_islem_tutari_top5$ymax, n=-1))
+ 
+# Make the plot
+ggplot(bkm_islem_tutari_top5, aes(ymax=ymax, ymin=ymin, xmax=4, xmin=3, fill=isyeri_grubu)) +
+     geom_rect() +
+     coord_polar(theta="y") + # Try to remove that to understand how the chart is built initially
+     xlim(c(2, 4)) # Try to remove that to see how to make a pie chart
+
+```
+
+## Sources
+
+* [1: Scraping HTML Tables](http://bradleyboehmke.github.io/2015/12/scraping-html-tables.html)
+* [2: Ggplot2 Visualizations](http://r-statistics.co/Top50-Ggplot2-Visualizations-MasterList-R-Code.html)
+
+
