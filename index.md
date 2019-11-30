@@ -10,5 +10,7 @@
 
 [BKM Assignment](https://pjournal.github.io/mef03-mehtapmetinoglu/bkm_assignment.html)
 
+## Week 6
 
+[Join Assignment](https://pjournal.github.io/mef03-mehtapmetinoglu/join_assignment.html)
 
